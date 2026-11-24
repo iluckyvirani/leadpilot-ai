@@ -1,0 +1,165 @@
+// LeadPilot AI - data model
+// Leads -> Messages (outbound drafts that need human approval, inbound replies)
+// AgentRun -> AgentStep (a full, replayable trace of every agent run)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  REPLIED
+  INTERESTED
+  CALL_BACK
+  DEMO_BOOKED
+  QUOTE_SENT
+  WON
+  LOST
+  NOT_INTERESTED
+  NO_RESPONSE
+  BOUNCED
+  DO_NOT_CONTACT
+}
+
+enum Tier {
+  HOT
+  WARM
+  COLD
+}
+
+enum EmailStatus {
+  NONE
+  FOUND // seen on the business's own website / social page
+  GUESSED // info@domain, domain has MX records but mailbox is unproven
+  INVALID
+}
+
+enum PhoneType {
+  NONE
+  MOBILE
+  LANDLINE
+  UNKNOWN
+}
+
+enum Channel {
+  EMAIL
+  WHATSAPP
+  INSTAGRAM
+}
+
+enum Direction {
+  OUTBOUND
+  INBOUND
+}
+
+enum MessageStatus {
+  DRAFT // written by the agent, waiting for a human
+  APPROVED // approved by a human, ready to send
+  SENT // a human sent it
+  REJECTED
+  RECEIVED // inbound reply
+}
+
+enum Author {
+  AGENT
+  HUMAN
+  LEAD
+}
+
+enum RunStatus {
+  RUNNING
+  DONE
+  ERROR
+}
+
+model Lead {
+  id              String      @id @default(cuid())
+  name            String
+  category        String
+  city            String
+  country         String      @default("IN")
+  address         String?
+  phone           String?
+  phoneType       PhoneType   @default(NONE)
+  website         String?
+  email           String?
+  emailStatus     EmailStatus @default(NONE)
+  instagram       String?
+  facebook        String?
+  rating          Float?
+  reviews         Int?
+  auditIssues     String[]
+  auditedAt       DateTime?
+  score           Int?
+  tier            Tier?
+  scoreBreakdown  Json?
+  status          LeadStatus  @default(NEW)
+  followUpStage   Int         @default(0)
+  nextFollowUpAt  DateTime?
+  lastContactedAt DateTime?
+  notes           String?
+  source          String      @default("manual")
+  placeId         String?     @unique
+  messages        Message[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([tier])
+}
+
+model Message {
+  id        String        @id @default(cuid())
+  leadId    String
+  lead      Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  channel   Channel
+  direction Direction
+  status    MessageStatus
+  author    Author
+  subject   String?
+  body      String
+  intent    String? // inbound: classified intent
+  rationale String? // why the agent wrote / classified it this way
+  runId     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status])
+  @@index([leadId])
+}
+
+model AgentRun {
+  id           String      @id @default(cuid())
+  goal         String
+  trigger      String      @default("manual") // manual | cron
+  status       RunStatus   @default(RUNNING)
+  model        String
+  summary      String?
+  error        String?
+  inputTokens  Int         @default(0)
+  outputTokens Int         @default(0)
+  toolCalls    Int         @default(0)
+  steps        AgentStep[]
+  createdAt    DateTime    @default(now())
+  finishedAt   DateTime?
+}
+
+model AgentStep {
+  id        String   @id @default(cuid())
+  runId     String
+  run       AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  index     Int
+  kind      String // thinking | text | tool_call | tool_result
+  toolName  String?
+  data      Json
+  isError   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([runId, index])
+}

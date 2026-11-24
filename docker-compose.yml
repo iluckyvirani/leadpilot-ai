@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: leadpilot
+      POSTGRES_PASSWORD: leadpilot
+      POSTGRES_DB: leadpilot
+    ports:
+      - "5433:5432"
+    volumes:
+      - leadpilot-db:/var/lib/postgresql/data
+
+volumes:
+  leadpilot-db:
